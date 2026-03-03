@@ -1,3 +1,4 @@
-../Core/Src/comandosAt.c:21:6:RAK_sendCmd	1
-../Core/Src/comandosAt.c:43:6:init_Rak	1
-../Core/Src/comandosAt.c:52:6:joinRakloop	2
+../Core/Src/comandosAt.c:22:6:RAK_sendCmd	1
+../Core/Src/comandosAt.c:44:6:init_Rak	1
+../Core/Src/comandosAt.c:53:6:joinRakloop	1
+../Core/Src/comandosAt.c:57:9:Check_Join_Status	3

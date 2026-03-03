@@ -17,6 +17,7 @@ extern UART_HandleTypeDef huart2;
 
 
 unsigned char rx_buffer[128];
+uint8_t flag_joined=0;
 
 void RAK_sendCmd(unsigned char *comando, unsigned int time){
 
@@ -52,13 +53,17 @@ void init_Rak() {
 void joinRakloop(){
  HAL_UART_Transmit(&huart2, (unsigned char*)"--- JOINING... ---\r\n", 20, 100);
  RAK_sendCmd((unsigned char*)"AT+JOIN=1:0:10:8\r\n", 200);
- while(1){
-  HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
-	      // Consultar estado cada 5 segundos
-	  RAK_sendCmd((unsigned char*)"AT+NJS=?\r\n", 5000);
-    if(strstr((char*)rx_buffer,"+AT+NJS=1") != NULL ){
-      HAL_UART_Transmit(&huart2, (unsigned char*)"RAK: JOINED!", 12, 100);
-      break;
-    }
- }
 }
+uint8_t Check_Join_Status(){
+
+	if(flag_joined == 1) return 1 ;
+	memset(rx_buffer,0,100);
+	RAK_sendCmd((unsigned char*)"AT+NJS=?\r\n", 5000);
+	if(strstr((char*)rx_buffer,"+AT+NJS=1") != NULL ){
+		flag_joined =1 ; //exito
+		HAL_UART_Transmit(&huart2, (unsigned char*)"RAK: JOINED!", 12, 100);
+		return 1;
+	}
+	return 0;
+}
+

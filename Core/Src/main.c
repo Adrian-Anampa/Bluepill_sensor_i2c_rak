@@ -52,6 +52,10 @@ UART_HandleTypeDef huart1;
 UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
+// Intervalos
+#define INTERVALO_DHT   2000  // Leer sensor cada 2s
+#define INTERVALO_CHECK 5000  // Verificar Join cada 5s
+#define INTERVALO_SEND  15000 // Enviar datos cada 15s
 char bufferAT[64];
 uint8_t RHI, RHD, TCI , TCD, SUM ;
 float tCelsius= 0 ;
@@ -73,6 +77,11 @@ static void MX_USART2_UART_Init(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+/* Variables para el control del tiempo */
+uint32_t last_time_dht = 0;
+uint32_t last_time_rak_check = 0;
+uint32_t last_time_send = 0;
+/*Funcion para enviar datos al rak en hexadecimal concatenados */
 void Rak_EnviaDatos(int datoint , float humdty , float temp){
 
 	uint8_t idByte=(uint8_t)datoint;
@@ -119,8 +128,15 @@ int main(void)
   MX_USART1_UART_Init();
   MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
+  HAL_TIM_Base_Start_IT(&htim1);
+
   init_Rak(); // INICIALIZAMOS EL RAK
   int val_adc=0;
+  // Inicializamos temporizadores
+    uint32_t current_time = HAL_GetTick();
+    last_time_dht = current_time;
+    last_time_rak_check = current_time;
+    last_time_send = current_time;
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -128,27 +144,50 @@ int main(void)
   while (1)
   {
     /* USER CODE END WHILE */
-	  val_adc++;
+	  current_time = HAL_GetTick(); // Hora actual en milisegundos
+	  /*------Lectura del Sensor--*/
+	  if (current_time - last_time_dht >= INTERVALO_DHT)
+	        {
+	            last_time_dht = current_time;
+
+	            if(DHT11_Start()) {
+	               RHI = DHT11_Read(); // Relative humidity integral
+	               RHD = DHT11_Read(); // Relative humidity decimal
+	               TCI = DHT11_Read(); // Celsius integral
+	               TCD = DHT11_Read(); // Celsius decimal
+	               SUM = DHT11_Read(); // Check sum
+	                 if (RHI + RHD + TCI + TCD == SUM)
+	            		{
+	            		  tCelsius = (float)TCI + (float)(TCD/10.0);
+	            		  RH = (float)RHI + (float)(RHD/10.0);
+	                    }
+	            }
+	        }
+	  if (Check_Join_Status() == 0)
+	        {
+	            // AUN NO ESTAMOS UNIDOS
+	            // Verificamos estado cada 5 segundos
+	            if (current_time - last_time_rak_check >= INTERVALO_CHECK) {
+	                last_time_rak_check = current_time;
+	                // La función Check_Join_Status ya hace la consulta AT+NJS=?
+	                HAL_UART_Transmit(&huart2, (uint8_t*)"Esperando Join...\r\n", 19, 100);
+	            }
+	        }
+	  else {
+          // YA ESTAMOS UNIDOS (flag_joined == 1)
+          // Ahora sí podemos enviar datos cada 15 segundos
+          if (current_time - last_time_send >= INTERVALO_SEND) {
+              last_time_send = current_time;
+
+              HAL_UART_Transmit(&huart2, (uint8_t*)"--- Enviando Datos ---\r\n", 24, 100);
+              Rak_EnviaDatos(val_adc, RH, tCelsius);
+              val_adc++; // Incrementamos contador
+              HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
+          }
+      }
+
 	  if(val_adc > 255) val_adc=0;
-	/*  -----------*/
-	  if(DHT11_Start())
-	  		    {
-	  		      RHI = DHT11_Read(); // Relative humidity integral
-	  		      RHD = DHT11_Read(); // Relative humidity decimal
-	  		      TCI = DHT11_Read(); // Celsius integral
-	  		      TCD = DHT11_Read(); // Celsius decimal
-	  		      SUM = DHT11_Read(); // Check sum
-	  		      if (RHI + RHD + TCI + TCD == SUM)
-	  		      {
-	  		        // Can use RHI and TCI for any purposes if whole number only needed
-	  		        tCelsius = (float)TCI + (float)(TCD/10.0);
-	  		        RH = (float)RHI + (float)(RHD/10.0);
-	  		      }
-	  		    }
-	  HAL_UART_Transmit(&huart2, (uint8_t*)"--- Enviando Datos ---\r\n", 24, 100);
-	  Rak_EnviaDatos(val_adc, RH, tCelsius);
-	  HAL_Delay(15000);
-	  HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_13);
+
     /* USER CODE BEGIN 3 */
   }
   /* USER CODE END 3 */
